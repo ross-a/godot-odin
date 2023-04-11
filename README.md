@@ -51,17 +51,17 @@ your library. It should be similar to following layout:
 @export
 // Initialization.
 example_library_init :: proc "c" (p_interface: ^gd.GDExtensionInterface, p_library: gd.GDExtensionClassLibraryPtr, r_initialization: ^gd.GDExtensionInitialization) -> gd.GDExtensionBool {
-	context = runtime.default_context()
-
-	init_obj := new(gd.InitObject)
-	init_obj.gde_interface = p_interface
-	init_obj.library = p_library
-    init_obj.initialization = r_initialization
-	init_obj.initializer = initialize_example_module
-	init_obj.terminator = uninitialize_example_module
-	init_obj.minimum_library_initialization_level = gd.ModuleInitializationLevel.MODULE_INITIALIZATION_LEVEL_SCENE
-
-	return gd.init(init_obj)
+  context = runtime.default_context()
+  
+  init_obj := new(gd.InitObject)
+  init_obj.gde_interface = p_interface
+  init_obj.library = p_library
+  init_obj.initialization = r_initialization
+  init_obj.initializer = initialize_example_module
+  init_obj.terminator = uninitialize_example_module
+  init_obj.minimum_library_initialization_level = gd.ModuleInitializationLevel.MODULE_INITIALIZATION_LEVEL_SCENE
+  
+  return gd.init(init_obj)
 }
 ```
 
