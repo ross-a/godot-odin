@@ -3,6 +3,7 @@
 > **Warning**
 >
 > This should be consider very experimental.
+>
 > This repository's `master` branch is only usable with Godot's ([GDExtension](https://godotengine.org/article/introducing-gd-extensions))
 > API (Godot 4.0 and later).
 >
