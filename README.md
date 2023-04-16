@@ -2,6 +2,7 @@
 
 > **Warning**
 >
+> This should be consider very experimental.
 > This repository's `master` branch is only usable with Godot's ([GDExtension](https://godotengine.org/article/introducing-gd-extensions))
 > API (Godot 4.0 and later).
 >
@@ -14,9 +15,7 @@ This repository contains the  *Odin bindings* for the [**Godot Engine**](https:/
 
 ## Compatibility
 
-**Warning 1:** This should be consider very experimental.
-
-**Warning 2:** The GDExtension API is brand new in Godot 4.0, and is still
+**Warning:** The GDExtension API is brand new in Godot 4.0, and is still
 considered in **beta** stage, despite Godot 4.0 itself being released.
 
 This applies to both the GDExtension interface header, the API JSON, and this
