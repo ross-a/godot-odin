@@ -14,7 +14,9 @@ This repository contains the  *Odin bindings* for the [**Godot Engine**](https:/
 
 ## Compatibility
 
-**Warning:** The GDExtension API is brand new in Godot 4.0, and is still
+**Warning 1:** This should be consider very experimental.
+
+**Warning 2:** The GDExtension API is brand new in Godot 4.0, and is still
 considered in **beta** stage, despite Godot 4.0 itself being released.
 
 This applies to both the GDExtension interface header, the API JSON, and this
@@ -81,6 +83,9 @@ initialize_example_module :: proc(init_obj: ^gd.InitObject, p_level: gd.ModuleIn
 ```
 
 Also note that something like: `gdc.make_class_file(string(#file), []typeid{ExampleMin, ExampleRef, Example})` should be called, to auto-generate and register odin "classes"
+
+And run: `odin run binding-generator.odin -file` in `bindgen` directory atleast once before hand.
+
 
 ## Included example
 

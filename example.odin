@@ -37,7 +37,7 @@ import "godot_odin/bindgen/gen/label"
 @test
 make_into_class_file :: proc(t: ^testing.T) {
 	// turn this file into a "fake" _class.odin file
-	gdc.make_class_file(string(#file), []typeid{ExampleMin, ExampleRef, Example})
+  gdc.make_class_file(string(#file), []typeid{ExampleMin, ExampleRef, Example})
 }
 clean_up :: proc(ptr: rawptr = nil) {
 	// for passing gdscript a pointer to something, then we can clean it up later
