@@ -5,6 +5,8 @@ package example
 import "core:os"
 import "core:fmt"
 import "core:mem"
+import "core:log"
+import "core:math"
 import "core:slice"
 import "core:strings"
 import "core:strconv"
@@ -25,14 +27,21 @@ import "godot_odin/bindgen/gen/viewport"
 import "godot_odin/bindgen/gen/ref_counted"
 import "godot_odin/bindgen/gen/object"
 import "godot_odin/bindgen/gen/vector2"
+import "godot_odin/bindgen/gen/vector3"
 import "godot_odin/bindgen/gen/vector4"
 import "godot_odin/bindgen/gen/array"
 import "godot_odin/bindgen/gen/dictionary"
+import "godot_odin/bindgen/gen/packed_vector2_array"
+import "godot_odin/bindgen/gen/packed_vector3_array"
 import "godot_odin/bindgen/gen/packed_int32_array"
 import "godot_odin/bindgen/gen/callable"
 import "godot_odin/bindgen/gen/node"
 import "godot_odin/bindgen/gen/node_path"
 import "godot_odin/bindgen/gen/label"
+import "godot_odin/bindgen/gen/control"
+import "godot_odin/bindgen/gen/canvas_item"
+import "godot_odin/bindgen/gen/array_mesh"
+import "godot_odin/bindgen/gen/mesh_instance3d"
 
 @test
 make_into_class_file :: proc(t: ^testing.T) {
@@ -100,6 +109,8 @@ Example :: struct {
 	test_tarray_arg : proc(p_array: ^godot.Array),
 	test_string_ops : proc() -> ^godot.String,
 	test_vector_ops : proc() -> int,
+
+	make_sphere : proc(),
 	
 	// TODO: make bit_sets work without "; u8" size defining part (odin picks smallest size needed, automagically use that)
 	test_bitfield : proc(flags: bit_set[Flags; u8]) -> bit_set[Flags; u8],
@@ -166,9 +177,10 @@ Example_return_something :: proc(base: ^godot.String) -> ^godot.String {
 	return base
 }
 Example_return_something_const :: proc() -> ^godot.Viewport {
+	inst := cast(^Example)context.user_ptr
 	utility_functions.print("  Return something const called.")
-	if node.is_inside_tree() {
-		result := node.get_viewport(); clean_up(result)
+	if inst->is_inside_tree() {
+		result := inst->get_viewport(); clean_up(result)
 		return result
 	}
 	return nil
@@ -194,10 +206,10 @@ Example_get_v4 :: proc() -> ^godot.Vector4 {
 	return v4
 }
 Example_test_node_argument :: proc(p_node: ^Example) -> ^Example {
-	context.user_ptr = p_node
+	inst := cast(^Example)context.user_ptr
 	str := "nil"
 	if p_node != nil {
-		str = fmt.tprintf("%d", object.get_instance_id())
+		str = fmt.tprintf("%d", object.get_instance_id(p_node))
   }
 	
 	utility_functions.print("  Test node argument called with ", str)
@@ -210,10 +222,8 @@ Example_extended_ref_checks :: proc(p_ref: ^ExampleRef) -> ^ExampleRef {
 	//+owner := cast(^ExampleRef)ExampleRef_new(userdata)
 	//+ref = cast(^ExampleRef)gdc.get_inst_from_owner(owner)
 
-	context.user_ptr = p_ref
-	p_ref_id := object.get_instance_id()
-	context.user_ptr = ref
-	ref_id := object.get_instance_id()
+	p_ref_id := object.get_instance_id(p_ref)
+	ref_id := object.get_instance_id(ref)
 	utility_functions.print("  Example ref checks called with value: ", p_ref_id, ", returning value: ", ref_id);	
 
 	return ref
@@ -259,7 +269,7 @@ Example_test_tarray :: proc() -> ^godot.Array {
 	empty_str := cast(gd.GDExtensionConstStringNamePtr)new(godot.StringName); defer free(empty_str)
 	array.set_typed(arr, gd.GDExtensionVariantType.GDEXTENSION_VARIANT_TYPE_VECTOR2, empty_str)
 	
-	array.resize(arr, 2)
+	arr->resize(2)
 	one := new(godot.Variant); clean_up(one)
 	two := new(godot.Variant); clean_up(two)
 	vone := new(godot.Vector2); defer free(vone)
@@ -269,8 +279,8 @@ Example_test_tarray :: proc() -> ^godot.Array {
 	variant.constructor(one, vone)
 	variant.constructor(two, vtwo)
 
-	array.set_idx(arr, 0, one)
-	array.set_idx(arr, 1, two)
+	arr->set_idx(0, one)
+	arr->set_idx(1, two)
 	
 	return arr
 }
@@ -337,9 +347,10 @@ Example_test_bitfield :: proc(flags: bit_set[Flags; u8]) -> bit_set[Flags; u8] {
 }
 
 Example_emit_custom_signal :: proc(name: ^godot.String, value: int) {
-	signal_name := new(godot.StringName)
+	inst := cast(^Example)context.user_ptr
+	signal_name := new(godot.StringName); clean_up(signal_name)
 	string_name.constructor(signal_name, "custom_signal")
-	object.emit_signal(signal_name, name, value)
+	inst->emit_signal(signal_name, name, value)
 }
 
 Example_set_custom_position :: proc(pos: ^godot.Vector2) {
@@ -357,18 +368,126 @@ Example__has_point :: proc(point: ^godot.Vector2) -> bool {
 	gstring.constructor(lbl, "Label")
 	np := new(godot.NodePath); defer free(np)
 	node_path.constructor(np, lbl)
-	if node.has_node(np) {
-		label_node := node.get_node_internal(np); defer free(label_node)
+	if inst->has_node(np) {
+		label_node := inst->get_node(np); defer free(label_node)
 
 		new_text := gdc.string_to_string("Got point: %s"); defer free(new_text)
 		new_new_text := gstring.OP_MODULE(new_text, point); defer free(new_new_text)
 
-		context.user_ptr = label_node
-		label.set_text(new_new_text)
+		label.set_text(cast(^godot.Label)label_node, new_new_text)
 	}
 	return false
 }
 
+make_sphere :: proc(verts: ^godot.PackedVector3Array, uvs: ^godot.PackedVector2Array, normals: ^godot.PackedVector3Array, indices: ^godot.PackedInt32Array) {
+	using math
+
+ 	// adapted from code @ https://docs.godotengine.org/en/stable/tutorials/3d/procedural_geometry/arraymesh.html
+	rings := 50
+	radial_segments := 50
+	radius : f32 = 1
+	
+	thisrow := 0
+	prevrow := 0
+	point := 0
+
+	// Loop over rings.
+	for i in 0..<(rings + 1) {
+		v := f32(i) / f32(rings)
+		w := sin(PI * v)
+		y := cos(PI * v)
+
+		// Loop over segments in ring.
+		for j in 0..<(radial_segments) {
+			u := f32(j) / f32(radial_segments)
+			x := sin(u * PI * 2.0)
+			z := cos(u * PI * 2.0)
+			vert := new(godot.Vector3); vector3.constructor(vert, x * radius * w, y * radius, z * radius * w)
+			uv := new(godot.Vector2); vector2.constructor(uv, u, v)
+			defer free(vert)
+			defer free(uv)
+			
+			packed_vector3_array.append(verts, vert)
+			n_vert := vert->normalized(); defer free(n_vert)
+			packed_vector3_array.append(normals, n_vert)
+			packed_vector2_array.append(uvs, uv)
+			point += 1
+
+			// Create triangles in ring using indices.
+			if i > 0 && j > 0 {
+				packed_int32_array.append(indices, prevrow + j - 1)
+				packed_int32_array.append(indices, prevrow + j)
+				packed_int32_array.append(indices, thisrow + j - 1)
+
+				packed_int32_array.append(indices, prevrow + j)
+				packed_int32_array.append(indices, thisrow + j)
+				packed_int32_array.append(indices, thisrow + j - 1)
+			}
+		}
+
+		if i > 0 {
+			packed_int32_array.append(indices, prevrow + radial_segments - 1)
+			packed_int32_array.append(indices, prevrow)
+			packed_int32_array.append(indices, thisrow + radial_segments - 1)
+
+			packed_int32_array.append(indices, prevrow)
+			packed_int32_array.append(indices, prevrow + radial_segments)
+			packed_int32_array.append(indices, thisrow + radial_segments - 1)
+		}
+
+		prevrow = thisrow
+		thisrow = point
+	}
+}
+
+Example_make_sphere :: proc() {
+	custom_logger :: proc(data: rawptr, level: runtime.Logger_Level, text: string, options: runtime.Logger_Options, location := #caller_location) {
+    utility_functions.print(fmt.tprintf("%v: %s", level, text))
+  }
+	context.logger.procedure = custom_logger
+
+	log.info("Let's make a sphere") // note: custom_logger() will display this in godot
+	
+	inst := cast(^Example)context.user_ptr
+
+	if inst != nil {
+		surface_array := new(godot.Array); array.constructor(surface_array); defer free(surface_array)
+		surface_array->resize(cast(int)godot.Mesh_ArrayType.ARRAY_MAX)
+
+		verts := new(godot.PackedVector3Array); packed_vector3_array.constructor(verts); defer free(verts)
+		uvs := new(godot.PackedVector2Array); packed_vector2_array.constructor(uvs); defer free(uvs)
+		normals := new(godot.PackedVector3Array); packed_vector3_array.constructor(normals); defer free(normals)
+		indices := new(godot.PackedInt32Array); packed_int32_array.constructor(indices); defer free(indices)
+
+		make_sphere(verts, uvs, normals, indices)
+
+		// Assign arrays to surface array.
+		v := new(godot.Variant); defer free(v)
+		variant.constructor(v, verts)
+		surface_array->set_idx(godot.Mesh_ArrayType.ARRAY_VERTEX, v)
+		variant.constructor(v, uvs)
+		surface_array->set_idx(godot.Mesh_ArrayType.ARRAY_TEX_UV, v)
+		variant.constructor(v, normals)
+		surface_array->set_idx(godot.Mesh_ArrayType.ARRAY_NORMAL, v)
+		variant.constructor(v, indices)
+		surface_array->set_idx(godot.Mesh_ArrayType.ARRAY_INDEX, v)
+
+		// Create mesh surface from mesh array.
+		// No blendshapes, lods, or compression used.
+		mesh := new(godot.ArrayMesh); defer free(mesh)
+		array_mesh.constructor(mesh)
+
+		blend_shapes := new(godot.Array); array.constructor(blend_shapes); defer free(blend_shapes) // note: this is a TypedArray array
+		lods := new(godot.Dictionary); dictionary.constructor(lods); defer free(lods)
+		mesh->add_surface_from_arrays(godot.Mesh_PrimitiveType.PRIMITIVE_TRIANGLES, surface_array, cast(^[^]godot.Array)blend_shapes, lods, 0)
+		
+		mi := new(godot.MeshInstance3D); defer free(mi)
+		mesh_instance3d.constructor(mi)
+		mi->set_mesh(mesh)
+
+		inst->add_child(mi, false, godot.Node_InternalMode.INTERNAL_MODE_DISABLED)
+	}
+}
 
 // --------------------------------------------------------------------------------------
 

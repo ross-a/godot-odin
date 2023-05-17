@@ -1,9 +1,31 @@
-[gd_scene load_steps=2 format=3 uid="uid://dmx2xuigcpvt4"]
+[gd_scene load_steps=5 format=3 uid="uid://dmx2xuigcpvt4"]
 
 [ext_resource type="Script" path="res://main.gd" id="1_c326s"]
 
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_cd2uj"]
+sky_top_color = Color(0.384314, 0.454902, 0.54902, 1)
+sky_horizon_color = Color(0.651961, 0.741176, 0.843137, 1)
+ground_bottom_color = Color(0.223529, 0.509804, 0.823529, 1)
+ground_horizon_color = Color(0.651961, 0.741176, 0.843137, 1)
+
+[sub_resource type="Sky" id="Sky_oetdb"]
+sky_material = SubResource("ProceduralSkyMaterial_cd2uj")
+
+[sub_resource type="Environment" id="Environment_bmg56"]
+background_mode = 2
+sky = SubResource("Sky_oetdb")
+tonemap_mode = 2
+glow_enabled = true
+
 [node name="Node" type="Node"]
 script = ExtResource("1_c326s")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_bmg56")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.866023, -0.433016, 0.250001, 0, 0.499998, 0.866027, -0.500003, 0.749999, -0.43301, 0, 0, 0)
+shadow_enabled = true
 
 [node name="Example" type="Example" parent="."]
 
@@ -21,5 +43,10 @@ offset_bottom = 21.0
 offset_right = 79.0
 offset_bottom = 29.0
 text = "Click me!"
+
+[node name="Node3D" type="Node3D" parent="."]
+
+[node name="Camera3D" type="Camera3D" parent="Node3D"]
+transform = Transform3D(1, 0, 0, 0, 0.947518, 0.319704, 0, -0.319704, 0.947518, 0, 0.835994, 2.05585)
 
 [connection signal="custom_signal" from="Example" to="." method="_on_example_custom_signal"]

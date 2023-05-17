@@ -53,6 +53,14 @@ get_signals :: proc() -> ^map[string]bool {
 	return sigs
 }
 
+get_callables :: proc() -> ^[dynamic]^godot.Callable {
+	@static callables : ^[dynamic]^godot.Callable
+	if callables == nil {
+		callables = new([dynamic]^godot.Callable)
+	}
+	return callables
+}
+
 get_vtable :: proc() -> ^map[string]gd.GDExtensionClassCallVirtual {
 	@static vtbl : ^map[string]gd.GDExtensionClassCallVirtual
 	if vtbl == nil {
@@ -84,7 +92,7 @@ make_class_user_data :: proc(T: typeid, cleanup: bool = false) -> ^ClassUserData
 	for ; idx < len(names); idx+=1 {
 		sf : reflect.Struct_Field = reflect.struct_field_by_name(T, names[idx])
 		if names[idx] == "_" && sf.is_using == true {
-			break // pick first unnamed field ("_") as parent "class" (fake it and bake it)			
+			break // pick first unnamed field ("_") as parent "class"
 		}
 	}
 	parent_type := idx < len(names) ? fmt.tprintf("%s", types[idx]) : ""
@@ -207,18 +215,26 @@ make_class_file :: proc(file: string, struct_list: []typeid) {
 ###_set_func :: proc "c" (p_instance: gd.GDExtensionClassInstancePtr, p_name: gd.GDExtensionConstStringNamePtr, p_value: gd.GDExtensionConstVariantPtr) -> gd.GDExtensionBool {
 	context = runtime.default_context()
 	context.allocator = mem.tracking_allocator(&(gdc.get_init_obj().ta))
-  //fmt.println(#procedure)
   inst  := cast(^###)p_instance
   subs  := string_name.substr(cast(^godot.StringName)p_name, 0); defer free(subs)
-	name  := gstring.to_string(subs)
+	name  := gstring.to_string(subs); defer free(strings.ptr_from_string(name))
  	names := reflect.struct_field_names(###)
   name = name[0:len(name)-1] // no terminator
+  //fmt.println(#procedure, name)
   if p_instance != nil && slice.contains(names, name) {
     sf := reflect.struct_field_by_name(###, name)
     tmp := cast(^godot.Variant)p_value
     a := reflect.struct_field_value_by_name(inst^, name, true)
     a_bytes := mem.any_to_bytes(a)
     data_start :: 8
+    if fmt.tprintf("%s", sf.type) == "string" {
+      str := new(godot.String); defer free(str)
+      variant.to_type(tmp, str)
+      delete((cast(^string)&a_bytes[0])^)
+      ostr := gstring.to_string(str) // don't delete me right away! this will leak like 1 byte at end... FIXME!
+      mem.copy(&a_bytes[0], &ostr, len(a_bytes))
+  	  return cast(gd.GDExtensionBool)1
+    }
     mem.copy(&a_bytes[0], &tmp.opaque[data_start], len(a_bytes))
   	return cast(gd.GDExtensionBool)1
   }
@@ -229,7 +245,7 @@ make_class_file :: proc(file: string, struct_list: []typeid) {
 	context.allocator = mem.tracking_allocator(&(gdc.get_init_obj().ta))
   inst := cast(^###)p_instance
   subs  := string_name.substr(cast(^godot.StringName)p_name, 0); defer free(subs)
-	name  := gstring.to_string(subs)
+	name  := gstring.to_string(subs); defer free(strings.ptr_from_string(name))
  	names := reflect.struct_field_names(###)
   name = name[0:len(name)-1] // no terminator
   //fmt.println(#procedure, name)
@@ -254,12 +270,19 @@ make_class_file :: proc(file: string, struct_list: []typeid) {
     if is_signal && signal in sigs && sigs[signal] {
       type = cast(i32)gd.GDExtensionVariantType.GDEXTENSION_VARIANT_TYPE_CALLABLE
       call := new(godot.Callable)
+      callables := gdc.get_callables()
+      append(callables, call)
       callable.constructor(call, cast(^godot.Object)inst._owner, cast(^godot.StringName)p_name)
       a_bytes = call.opaque[:]
     }
+    if fmt.tprintf("%s", sf.type) == "string" {
+      str := new(godot.String); defer free(str)
+      gstring.constructor(str, fmt.tprintf("%v", a))
+      a_bytes = str.opaque[:]
+    }
 
     mem.copy(&tmp.opaque[0], &type, size_of(type)) // need to set Variant type too!
-    mem.copy(&tmp.opaque[data_start], &a_bytes[0], len(a_bytes))
+    mem.copy(&tmp.opaque[data_start], &a_bytes[0], int(godot.get_size_of_type(type)))
   	return cast(gd.GDExtensionBool)1
   }
 	return cast(gd.GDExtensionBool)0
@@ -313,6 +336,15 @@ make_class_file :: proc(file: string, struct_list: []typeid) {
 	context = runtime.default_context()
 	context.allocator = mem.tracking_allocator(&(gdc.get_init_obj().ta))
 	//fmt.println(#procedure, "###")
+  if p_list == nil do return
+  props := cast([^]gd.GDExtensionPropertyInfo)p_list
+  for i:=0; ; i+=1 {
+    if props[i].name == nil do break
+    free(props[i].name)
+    free(props[i].class_name)
+    free(props[i].hint_string)
+  }
+  free(p_list)
 }
 ###_property_can_revert_func :: proc "c" (p_instance: gd.GDExtensionClassInstancePtr, p_name: gd.GDExtensionConstStringNamePtr) -> gd.GDExtensionBool {
 	context = runtime.default_context()
@@ -336,7 +368,7 @@ make_class_file :: proc(file: string, struct_list: []typeid) {
 	context.allocator = mem.tracking_allocator(&(gdc.get_init_obj().ta))
 	//fmt.println(#procedure, "###")
   context.user_ptr = p_instance
-	gstring.constructor(cast(^godot.String)p_out, fmt.tprintf("[ %d ]", object.get_instance_id()))
+	gstring.constructor(cast(^godot.String)p_out, fmt.tprintf("[ %d ]", object.get_instance_id(cast(^###)p_instance)))
 	r_is_valid^ = 1
 }
 ###_reference_func :: proc "c" (p_instance: gd.GDExtensionClassInstancePtr) {
@@ -357,7 +389,7 @@ make_class_file :: proc(file: string, struct_list: []typeid) {
 	context = runtime.default_context()
 	context.allocator = mem.tracking_allocator(&(gdc.get_init_obj().ta))
   subs  := string_name.substr(cast(^godot.StringName)p_name, 0); defer free(subs)
-	name  := gstring.to_string(subs)
+	name  := gstring.to_string(subs); defer free(strings.ptr_from_string(name))
  	names := reflect.struct_field_names(###)
   name = name[0:len(name)-1] // no terminator
   //fmt.println(#procedure, name)
@@ -365,11 +397,11 @@ make_class_file :: proc(file: string, struct_list: []typeid) {
     sf := reflect.struct_field_by_name(###, name)
     tag := fmt.tprintf("%s", sf.tag)
 		is_virtual := strings.contains(tag, "virtual")
-    name = fmt.tprintf("###_%s", name) // vtable contains class as prefix
+    name1 := fmt.tprintf("###_%s", name) // vtable contains class as prefix
     if is_virtual {
       vtbl := gdc.get_vtable()
-      if name in vtbl {
-        return vtbl[name]
+      if name1 in vtbl {
+        return vtbl[name1]
       }
     }
   }
@@ -639,6 +671,24 @@ make_class_file :: proc(file: string, struct_list: []typeid) {
 											os.write_string(out_fd, ")\n") // end args to proc call and end variant.constructor()
 											
 										}
+
+										if arg_len != 0 { // clean up of args
+											for s, idx in args {
+												_, type, def_val := get_name_type_default(strings.trim_space(s))
+												arg_type, vararg := correct_type(type, "", struct_list)
+												
+												if vararg {
+													os.write_string(out_fd, fmt.tprintf("    for anyidx in 0..<(p_argument_count-%d) {{\n", idx))
+													os.write_string(out_fd, fmt.tprintf("      switch v in arg%d[anyidx] {{\n", idx))
+													os.write_string(out_fd, fmt.tprintf("    	 case string:\n"))
+													os.write_string(out_fd, fmt.tprintf("		     free(strings.ptr_from_string(v))\n"))
+													os.write_string(out_fd, fmt.tprintf("		     free(&arg%d[anyidx].(string))\n", idx))
+													os.write_string(out_fd, fmt.tprintf("      }}\n"))
+													os.write_string(out_fd, fmt.tprintf("    }}\n"))
+													break
+												}
+											}
+										}
 																		
 										os.write_string(out_fd, "  }\n")
 									}
@@ -739,6 +789,22 @@ make_class_file :: proc(file: string, struct_list: []typeid) {
 							for l in inst_bind_lines {
 								os.write_string(out_fd, l)
 							}
+							
+							// setup all struct proc pointers in type hierarchy
+							curr_struct := struct_list[idx]
+							for ;; {
+								field := reflect.struct_field_by_name(curr_struct, "_")
+								names := reflect.struct_field_names(field.type.id)
+								types := reflect.struct_field_types(field.type.id)
+								ftype := fmt.tprintf("%s", field.type)
+								if ftype == "Wrapped" do break
+								for name, idx in names {
+									if strings.has_prefix(name, "_") do continue
+									if name == "_owner" do break
+									os.write_string(out_fd, fmt.tprintf("  inst.%s = %s.%s\n", name, camel_to_snake(ftype), name))
+								}
+								curr_struct = field.type.id
+							}
 						}
 						os.write_string(out_fd, "}\n") // finish ###_instance_bind :: proc()
 
@@ -807,6 +873,13 @@ make_class_file :: proc(file: string, struct_list: []typeid) {
 				os.write_string(out_fd, "  sigs := gdc.get_signals()\n")
 				os.write_string(out_fd, "  delete(sigs^)\n")
 				os.write_string(out_fd, "  free(sigs)\n")
+
+				os.write_string(out_fd, "  callables := gdc.get_callables()\n")
+				os.write_string(out_fd, "  for c in callables {\n")
+				os.write_string(out_fd, "    free(c)\n")
+				os.write_string(out_fd, "  }\n")
+				os.write_string(out_fd, "  delete(callables^)\n")
+				os.write_string(out_fd, "  free(callables)\n")
 				
 				os.write_string(out_fd, "  vtbl := gdc.get_vtable()\n")
 				os.write_string(out_fd, "  delete(vtbl^)\n")

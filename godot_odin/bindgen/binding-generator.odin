@@ -33,6 +33,9 @@ generate_global_constants :: proc(root: json.Object, target_dir: string, g: ^Glo
 		os.write_string(fd, "import \"core:fmt\"\n")
 		os.write_string(fd, "import \"core:strings\"\n")		
 
+		// TODO real_t with different 32/64 size based on "build_configuration"
+		os.write_string(fd, "real_t :: f32\n")
+		
 		for constant in root["global_constants"].(json.Array) {
 		}
 
@@ -52,11 +55,11 @@ generate_global_constants :: proc(root: json.Object, target_dir: string, g: ^Glo
 			os.write_string(fd, "}\n\n")
 		}
 
-		prevent_redeclaration : [dynamic]string; defer delete(prevent_redeclaration)
-		for class_api in root["classes"].(json.Array) { // putting class enums and constants here too
-			class_name := fmt.tprintf("%s", class_api.(json.Object)["name"])
-			if "enums" in class_api.(json.Object) {
-				for enum_api in class_api.(json.Object)["enums"].(json.Array) {
+		put_in_enums_and_consts :: proc(fd: os.Handle, class_api: json.Object, with_consts: bool, prevent_redeclaration: ^[dynamic]string, g: ^Globals) {
+			class_name := fmt.tprintf("%s", class_api["name"])
+
+			if "enums" in class_api {
+				for enum_api in class_api["enums"].(json.Array) {
 					name := fmt.tprintf("%s_%s", class_name, enum_api.(json.Object)["name"])
 					os.write_string(fd, fmt.tprintf("%s :: enum {{\n", name))
 					if "values" in enum_api.(json.Object) {
@@ -69,8 +72,8 @@ generate_global_constants :: proc(root: json.Object, target_dir: string, g: ^Glo
 					os.write_string(fd, "}\n")
 				}
 			}
-			if "constants" in class_api.(json.Object) {
-				for value in class_api.(json.Object)["constants"].(json.Array) {
+			if "constants" in class_api && with_consts {
+				for value in class_api["constants"].(json.Array) {
 					type := ""
 					if !("type" in value.(json.Object)) {
 						type = "int"
@@ -81,7 +84,7 @@ generate_global_constants :: proc(root: json.Object, target_dir: string, g: ^Glo
 					if slice.contains(prevent_redeclaration[:], vname) {
 						continue
 					}
-					append(&prevent_redeclaration, vname)
+					append(prevent_redeclaration, vname)
 					vtype := fmt.tprintf("%s", value.(json.Object)["type"])
 					val   := fmt.tprintf("%.0f", value.(json.Object)["value"])
 					vtype = correct_type(vtype, "", g)
@@ -90,9 +93,18 @@ generate_global_constants :: proc(root: json.Object, target_dir: string, g: ^Glo
 				}
 			}
 		}
+
+		prevent_redeclaration : [dynamic]string; defer delete(prevent_redeclaration)
+
+		for builtin_class_api in root["builtin_classes"].(json.Array) {
+			put_in_enums_and_consts(fd, builtin_class_api.(json.Object), false, &prevent_redeclaration, g)
+		}
+		for class_api in root["classes"].(json.Array) {
+			put_in_enums_and_consts(fd, class_api.(json.Object), true, &prevent_redeclaration, g)
+		}
 		
 		os.write_string(fd, `
-VariantType :: enum {
+Variant_Type :: enum {
 	NIL,
 
 	// atomic types
@@ -144,58 +156,58 @@ VariantType :: enum {
 }
 
 get_typestring_as_i32 :: proc(s: string, clean_up: bool = false) -> i32 {
-  @static _types : map[string]VariantType
+  @static _types : map[string]Variant_Type
 	if clean_up {
 		delete(_types)
 		return 0
 	}
 
   if len(_types) == 0 {
-    _types["nil"] = VariantType.NIL  // TODO auto-gen this
+    _types["nil"] = Variant_Type.NIL  // TODO auto-gen this
 	// atomic types
-    _types[	"bool"] = VariantType.BOOL
-    _types[	"int"] = VariantType.INT
-    _types[	"float"] = VariantType.FLOAT
-    _types[	"string"] = VariantType.STRING
+    _types[	"bool"] = Variant_Type.BOOL
+    _types[	"int"] = Variant_Type.INT
+    _types[	"float"] = Variant_Type.FLOAT
+    _types[	"string"] = Variant_Type.STRING
 	
 	// math types
-    _types[	"vector2"] = VariantType.VECTOR2
-    _types[	"vector2i"] = VariantType.VECTOR2I
-    _types[	"rect2"] = VariantType.RECT2
-    _types[	"rect2i"] = VariantType.RECT2I
-    _types[	"vector3"] = VariantType.VECTOR3
-    _types[	"vector3i"] = VariantType.VECTOR3I
-    _types[	"transform2d"] = VariantType.TRANSFORM2D
-    _types[	"vector4"] = VariantType.VECTOR4
-    _types[	"vector4i"] = VariantType.VECTOR4I
-    _types[	"plane"] = VariantType.PLANE
-    _types[	"quaternion"] = VariantType.QUATERNION
-    _types[	"aabb"] = VariantType.AABB
-    _types[	"basis"] = VariantType.BASIS
-    _types[	"transform3d"] = VariantType.TRANSFORM3D
-    _types[	"projection"] = VariantType.PROJECTION
+    _types[	"vector2"] = Variant_Type.VECTOR2
+    _types[	"vector2i"] = Variant_Type.VECTOR2I
+    _types[	"rect2"] = Variant_Type.RECT2
+    _types[	"rect2i"] = Variant_Type.RECT2I
+    _types[	"vector3"] = Variant_Type.VECTOR3
+    _types[	"vector3i"] = Variant_Type.VECTOR3I
+    _types[	"transform2d"] = Variant_Type.TRANSFORM2D
+    _types[	"vector4"] = Variant_Type.VECTOR4
+    _types[	"vector4i"] = Variant_Type.VECTOR4I
+    _types[	"plane"] = Variant_Type.PLANE
+    _types[	"quaternion"] = Variant_Type.QUATERNION
+    _types[	"aabb"] = Variant_Type.AABB
+    _types[	"basis"] = Variant_Type.BASIS
+    _types[	"transform3d"] = Variant_Type.TRANSFORM3D
+    _types[	"projection"] = Variant_Type.PROJECTION
 
 	// misc types
-    _types[	"color"] = VariantType.COLOR
-    _types[	"string_name"] = VariantType.STRING_NAME
-    _types[	"node_path"] = VariantType.NODE_PATH
-    _types[	"rid"] = VariantType.RID
-    _types[	"object"] = VariantType.OBJECT
-    _types[	"callable"] = VariantType.CALLABLE
-    _types[	"signal"] = VariantType.SIGNAL
-    _types[	"dictionary"] = VariantType.DICTIONARY
-    _types[	"array"] = VariantType.ARRAY
+    _types[	"color"] = Variant_Type.COLOR
+    _types[	"string_name"] = Variant_Type.STRING_NAME
+    _types[	"node_path"] = Variant_Type.NODE_PATH
+    _types[	"rid"] = Variant_Type.RID
+    _types[	"object"] = Variant_Type.OBJECT
+    _types[	"callable"] = Variant_Type.CALLABLE
+    _types[	"signal"] = Variant_Type.SIGNAL
+    _types[	"dictionary"] = Variant_Type.DICTIONARY
+    _types[	"array"] = Variant_Type.ARRAY
 	
 	// typed arrays
-    _types[	"packed_byte_array"] = VariantType.PACKED_BYTE_ARRAY
-    _types[	"packed_int32_array"] = VariantType.PACKED_INT32_ARRAY
-    _types[	"packed_int64_array"] = VariantType.PACKED_INT64_ARRAY
-    _types[	"packed_float32_array"] = VariantType.PACKED_FLOAT32_ARRAY
-    _types[	"packed_float64_array"] = VariantType.PACKED_FLOAT64_ARRAY
-    _types[	"packed_string_array"] = VariantType.PACKED_STRING_ARRAY
-    _types[	"packed_vector2_array"] = VariantType.PACKED_VECTOR2_ARRAY
-    _types[	"packed_vector3_array"] = VariantType.PACKED_VECTOR3_ARRAY
-    _types[	"packed_color_array"] = VariantType.PACKED_COLOR_ARRAY
+    _types[	"packed_byte_array"] = Variant_Type.PACKED_BYTE_ARRAY
+    _types[	"packed_int32_array"] = Variant_Type.PACKED_INT32_ARRAY
+    _types[	"packed_int64_array"] = Variant_Type.PACKED_INT64_ARRAY
+    _types[	"packed_float32_array"] = Variant_Type.PACKED_FLOAT32_ARRAY
+    _types[	"packed_float64_array"] = Variant_Type.PACKED_FLOAT64_ARRAY
+    _types[	"packed_string_array"] = Variant_Type.PACKED_STRING_ARRAY
+    _types[	"packed_vector2_array"] = Variant_Type.PACKED_VECTOR2_ARRAY
+    _types[	"packed_vector3_array"] = Variant_Type.PACKED_VECTOR3_ARRAY
+    _types[	"packed_color_array"] = Variant_Type.PACKED_COLOR_ARRAY
   }
 
   str_tmp := strings.to_lower(s); defer delete(str_tmp)
@@ -218,6 +230,50 @@ get_type_as_i32 :: proc(t: typeid, clean_up: bool = false) -> i32 {
     _types[t] = get_typestring_as_i32(fmt.tprintf("%s", t))
     return _types[t]
   }
+}
+
+get_size_of_type :: proc(t: i32, clean_up: bool = false) -> i32 {
+  #partial switch cast(Variant_Type)t {
+    case .NIL: return 0
+    case .BOOL: return 1
+    case .INT: return 8
+    case .FLOAT: return 8
+    case .STRING: return String_SIZE
+    case .VECTOR2: return Vector2_SIZE
+    case .VECTOR2I: return Vector2i_SIZE
+    case .RECT2: return Rect2_SIZE
+    case .RECT2I: return Rect2i_SIZE
+    case .VECTOR3: return Vector3_SIZE
+    case .VECTOR3I: return Vector3i_SIZE
+    case .TRANSFORM2D: return Transform2D_SIZE
+    case .VECTOR4: return Vector4_SIZE
+    case .VECTOR4I: return Vector4i_SIZE
+    case .PLANE: return Plane_SIZE
+    case .QUATERNION: return Quaternion_SIZE
+    case .AABB: return AABB_SIZE
+    case .BASIS: return Basis_SIZE
+    case .TRANSFORM3D: return Transform3D_SIZE
+    case .PROJECTION: return Projection_SIZE
+    case .COLOR: return Color_SIZE
+    case .STRING_NAME: return StringName_SIZE
+    case .NODE_PATH: return NodePath_SIZE
+    case .RID: return RID_SIZE
+    case .OBJECT: return size_of(rawptr) // is this right?
+    case .CALLABLE: return Callable_SIZE
+    case .SIGNAL: return Signal_SIZE
+    case .DICTIONARY: return Dictionary_SIZE
+    case .ARRAY: return Array_SIZE
+    case .PACKED_BYTE_ARRAY: return PackedByteArray_SIZE
+    case .PACKED_INT32_ARRAY: return PackedInt32Array_SIZE
+    case .PACKED_INT64_ARRAY: return PackedInt64Array_SIZE
+    case .PACKED_FLOAT32_ARRAY: return PackedFloat32Array_SIZE
+    case .PACKED_FLOAT64_ARRAY: return PackedFloat64Array_SIZE
+    case .PACKED_STRING_ARRAY: return PackedStringArray_SIZE
+    case .PACKED_VECTOR2_ARRAY: return PackedVector2Array_SIZE
+    case .PACKED_VECTOR3_ARRAY: return PackedVector3Array_SIZE
+    case .PACKED_COLOR_ARRAY: return PackedColorArray_SIZE
+  }
+  return 0
 }
 
 Operator :: enum {
@@ -430,24 +486,35 @@ correct_type :: proc(type_name: string, meta: string, g: ^Globals) -> string {
 	type_conversion["double"] = "f64"
 	type_conversion["nil"] = ""
 	type_conversion["int"] = "int"
-	type_conversion["uint"] = "uint"	
+	type_conversion["uint"] = "uint"
+	type_conversion["int8"] = "i8"
+	type_conversion["uint8"] = "u8"
+	type_conversion["int16"] = "i16"
+	type_conversion["uint16"] = "u16"
 	type_conversion["int32"] = "i32"
-	type_conversion["uint32"] = "u32"	
+	type_conversion["uint32"] = "u32"
 	type_conversion["int64"] = "i64"
-	type_conversion["uint64"] = "u64"	
+	type_conversion["uint64"] = "u64"
 	type_conversion["bool"] = "bool"
 	type_conversion["u8"] = "u8"
 	type_conversion["i8"] = "i8"
 	type_conversion["u16"] = "u16"
 	type_conversion["i16"] = "i16"
 	type_conversion["u32"] = "u32"
-	type_conversion["i32"] = "i32"	
+	type_conversion["i32"] = "i32"
 	type_conversion["u64"] = "u64"
-	type_conversion["i64"] = "i64"	
+	type_conversion["i64"] = "i64"
 	type_conversion["f32"] = "f32"
 	type_conversion["f64"] = "f64"
 
 	type_conversion["int8_t"] = "i8"
+	type_conversion["uint8_t"] = "u8"
+	type_conversion["int16_t"] = "i16"
+	type_conversion["uint16_t"] = "u16"
+	type_conversion["int32_t"] = "i32"
+	type_conversion["uint32_t"] = "u32"
+	type_conversion["int64_t"] = "i64"
+	type_conversion["uint64_t"] = "u64"
 	
   if meta != "" {
 		if meta in type_conversion {
@@ -456,9 +523,22 @@ correct_type :: proc(type_name: string, meta: string, g: ^Globals) -> string {
 			return meta
 		}
 	}
+	tn := type_name
+	if strings.has_prefix(tn, "const ") {
+		tn = tn[6:]
+	}
+	if strings.has_suffix(tn, "*") {
+		tn = tn[:len(tn)-1]
+	}
+	if strings.has_suffix(tn, " *") {
+		tn = tn[:len(tn)-2]
+	}
+	if strings.has_suffix(tn, " **") {
+		tn = tn[:len(tn)-3]
+	}
 
-	if type_name in type_conversion {
-		return type_conversion[type_name]
+	if tn in type_conversion {
+		return type_conversion[tn]
 	}
 
 	if strings.has_prefix(type_name, "typedarray::") {
@@ -495,7 +575,9 @@ correct_type :: proc(type_name: string, meta: string, g: ^Globals) -> string {
 }
 	
 type_for_parameter :: proc(type_name: string, meta: string, g: ^Globals) -> string {
-	if is_pod_type(type_name) && type_name != "Nil" || is_enum(type_name) {
+	if strings.contains(type_name, "void") {
+		return "rawptr" // all "void*" and "const void*" are assumed to be rawptrs
+	} else if is_pod_type(type_name) && type_name != "Nil" || is_enum(type_name) {
 		return correct_type(type_name, meta, g)
 	} else if is_variant(type_name, g) || is_refcounted(type_name, g) || type_name == "Object" {
 		return fmt.tprintf("^%s", correct_type(type_name, "", g))
@@ -505,26 +587,28 @@ type_for_parameter :: proc(type_name: string, meta: string, g: ^Globals) -> stri
 }
 
 escape_identifier :: proc(id: string) -> string {
-	@static cpp_keywords_map: map[string]string
-	if len(cpp_keywords_map) == 0 {
-    cpp_keywords_map["class"] = "_class"
-    cpp_keywords_map["char"] = "_char"
-    cpp_keywords_map["short"] = "_short"
-    cpp_keywords_map["bool"] = "_bool"
-    cpp_keywords_map["int"] = "_int"
-    cpp_keywords_map["default"] = "_default"
-    cpp_keywords_map["case"] = "_case"
-    cpp_keywords_map["switch"] = "_switch"
-    cpp_keywords_map["export"] = "_export"
-    cpp_keywords_map["template"] = "_template"
-    cpp_keywords_map["new"] = "new_"
-    cpp_keywords_map["operator"] = "_operator"
-    cpp_keywords_map["typeof"] = "type_of"
-    cpp_keywords_map["typename"] = "type_name"
-    cpp_keywords_map["context"] = "_context"		
+	@static odin_keywords_map: map[string]string
+	if len(odin_keywords_map) == 0 {
+    odin_keywords_map["class"] = "_class"
+    odin_keywords_map["char"] = "_char"
+    odin_keywords_map["short"] = "_short"
+    odin_keywords_map["bool"] = "_bool"
+    odin_keywords_map["int"] = "_int"
+    odin_keywords_map["default"] = "_default"
+    odin_keywords_map["case"] = "_case"
+    odin_keywords_map["switch"] = "_switch"
+    odin_keywords_map["export"] = "_export"
+    odin_keywords_map["template"] = "_template"
+    odin_keywords_map["new"] = "new_"
+    odin_keywords_map["operator"] = "_operator"
+    odin_keywords_map["typeof"] = "type_of"
+    odin_keywords_map["typename"] = "type_name"
+    odin_keywords_map["context"] = "_context"
+		odin_keywords_map["in"] = "_in"
+		odin_keywords_map["map"] = "_map"
   }
-  if id in cpp_keywords_map {
-		return cpp_keywords_map[id]
+  if id in odin_keywords_map {
+		return odin_keywords_map[id]
 	}
 	return id
 }
@@ -573,7 +657,6 @@ make_function_parameters :: proc(parameters: json.Array, g: ^Globals, include_de
 			parameter = fmt.tprintf("%s = ", parameter)
 			if is_enum(type) {
 				parameter_type := correct_type(type, "", g)
-				if parameter_type == "void" do parameter_type = "Variant"
 				parameter = fmt.tprintf("%s%s", parameter, parameter_type)
 			}
 			default_value := fmt.tprintf("%s", par.(json.Object)["default_value"])
@@ -592,8 +675,8 @@ make_function_parameters :: proc(parameters: json.Array, g: ^Globals, include_de
 }
 
 get_ptr_to_arg :: proc() -> (pta: map[string][2]string) {
-	// for casting to needed type to interface with VariantTypes
-	pta["int"]	= {"INT", "i64"} // an odin type = { GD..VariantType, some type to cast to (for interface reasons) }
+	// for casting to needed type to interface with Variant_Types
+	pta["int"]	= {"INT", "i64"} // an odin type = { GD..Variant_Type, some type to cast to (for interface reasons) }
 	pta["uint"] = {"INT", "i64"}
 	pta["bool"] = {"BOOL", "u8"} // most of these are from method_ptrcall.hpp in godot-cpp src, but with odin types
 	pta["u8"]		= {"INT", "i64"}
@@ -675,18 +758,18 @@ generate_variant_class :: proc(target_dir: string, g: ^Globals) {
 
 		os.write_string(fd, `
 from_type_constructor :: proc(type: int) -> gd.GDExtensionVariantFromTypeConstructorFunc {
-  @static from_type : [godot.VariantType.VARIANT_MAX]gd.GDExtensionVariantFromTypeConstructorFunc
+  @static from_type : [godot.Variant_Type.VARIANT_MAX]gd.GDExtensionVariantFromTypeConstructorFunc
   if from_type[1] == nil { // start from 1 to skip NIL
-  	for i := 1; i < cast(int)godot.VariantType.VARIANT_MAX; i+=1 {
+  	for i := 1; i < cast(int)godot.Variant_Type.VARIANT_MAX; i+=1 {
 	  	from_type[i] = gd.gde_interface.get_variant_from_type_constructor(cast(gd.GDExtensionVariantType)i)
     }
   }
   return from_type[type]
 }
 to_type_constructor :: proc(type: int) -> gd.GDExtensionTypeFromVariantConstructorFunc {
-  @static to_type : [godot.VariantType.VARIANT_MAX]gd.GDExtensionTypeFromVariantConstructorFunc
+  @static to_type : [godot.Variant_Type.VARIANT_MAX]gd.GDExtensionTypeFromVariantConstructorFunc
   if to_type[1] == nil { // start from 1 to skip NIL
-  	for i := 1; i < cast(int)godot.VariantType.VARIANT_MAX; i+=1 {
+  	for i := 1; i < cast(int)godot.Variant_Type.VARIANT_MAX; i+=1 {
 	  	to_type[i] = gd.gde_interface.get_variant_to_type_constructor(cast(gd.GDExtensionVariantType)i)
     }
   }
@@ -712,11 +795,11 @@ destroy :: proc(me: ^godot.Variant) {
 				os.write_string(fd, fmt.tprintf(`
 constructor%d :: proc(me: ^godot.Variant, val: %s) {{
   lval : %s = cast(%s)val
-  from_type_constructor(cast(int)godot.VariantType.%s)(cast(gd.GDExtensionVariantPtr)&me.opaque[0], cast(gd.GDExtensionTypePtr)&lval)
+  from_type_constructor(cast(int)godot.Variant_Type.%s)(cast(gd.GDExtensionVariantPtr)&me.opaque[0], cast(gd.GDExtensionTypePtr)&lval)
 }}
 to_type%d :: proc(me: ^godot.Variant, ret: ^%s) {{
   lval : %s
-  to_type_constructor(cast(int)godot.VariantType.%s)(cast(gd.GDExtensionTypePtr)&lval, cast(gd.GDExtensionVariantPtr)&me.opaque[0])
+  to_type_constructor(cast(int)godot.Variant_Type.%s)(cast(gd.GDExtensionTypePtr)&lval, cast(gd.GDExtensionVariantPtr)&me.opaque[0])
   ret^ = lval
 }}
 `, idx, k, v[1], v[1], v[0], idx, k, k, v[0]))
@@ -725,24 +808,24 @@ to_type%d :: proc(me: ^godot.Variant, ret: ^%s) {{
 				os.write_string(fd, fmt.tprintf(`
 constructor%d :: proc(me: ^godot.Variant, val: %s) {{
   if val != nil {{
-    from_type_constructor(cast(int)godot.VariantType.%s)(cast(gd.GDExtensionVariantPtr)&me.opaque[0], cast(gd.GDExtensionTypePtr)val)
+    from_type_constructor(cast(int)godot.Variant_Type.%s)(cast(gd.GDExtensionVariantPtr)&me.opaque[0], cast(gd.GDExtensionTypePtr)val)
   }} else {{
     nullobj : godot.GodotObject = nil
-    from_type_constructor(cast(int)godot.VariantType.%s)(cast(gd.GDExtensionVariantPtr)&me.opaque[0], cast(gd.GDExtensionTypePtr)&nullobj)
+    from_type_constructor(cast(int)godot.Variant_Type.%s)(cast(gd.GDExtensionVariantPtr)&me.opaque[0], cast(gd.GDExtensionTypePtr)&nullobj)
   }}
 }}
 to_type%d :: proc(me: ^godot.Variant, ret: %s) {{
-  to_type_constructor(cast(int)godot.VariantType.%s)(cast(gd.GDExtensionTypePtr)ret, cast(gd.GDExtensionVariantPtr)&me.opaque[0])
+  to_type_constructor(cast(int)godot.Variant_Type.%s)(cast(gd.GDExtensionTypePtr)ret, cast(gd.GDExtensionVariantPtr)&me.opaque[0])
 }}
 `, idx, k, v[0], v[0], idx, k, v[0]))
 				
 			}else {
 				os.write_string(fd, fmt.tprintf(`
 constructor%d :: proc(me: ^godot.Variant, val: %s) {{
-  from_type_constructor(cast(int)godot.VariantType.%s)(cast(gd.GDExtensionVariantPtr)&me.opaque[0], cast(gd.GDExtensionTypePtr)&val.opaque[0])
+  from_type_constructor(cast(int)godot.Variant_Type.%s)(cast(gd.GDExtensionVariantPtr)&me.opaque[0], cast(gd.GDExtensionTypePtr)&val.opaque[0])
 }}
 to_type%d :: proc(me: ^godot.Variant, ret: %s) {{
-  to_type_constructor(cast(int)godot.VariantType.%s)(cast(gd.GDExtensionTypePtr)&ret.opaque[0], cast(gd.GDExtensionVariantPtr)&me.opaque[0])
+  to_type_constructor(cast(int)godot.Variant_Type.%s)(cast(gd.GDExtensionTypePtr)&ret.opaque[0], cast(gd.GDExtensionVariantPtr)&me.opaque[0])
 }}
 `, idx, k, v[0], idx, k, v[0]))
 				
@@ -759,13 +842,13 @@ constructor_string :: proc(me: ^godot.Variant, str: string) {{
   gd.gde_interface.string_new_with_latin1_chars(cast(gd.GDExtensionStringPtr)&val.opaque[0], str)
   delete(str)
 
-  from_type_constructor(cast(int)godot.VariantType.STRING)(cast(gd.GDExtensionVariantPtr)&me.opaque[0], cast(gd.GDExtensionTypePtr)&val.opaque[0])
+  from_type_constructor(cast(int)godot.Variant_Type.STRING)(cast(gd.GDExtensionVariantPtr)&me.opaque[0], cast(gd.GDExtensionTypePtr)&val.opaque[0])
 }}
 to_type_string :: proc(me: ^godot.Variant, ret: ^string) {{
 	s := new(godot.String); defer free(s)
 	to_type(me, s)
 	length := gd.gde_interface.string_to_latin1_chars(cast(gd.GDExtensionConstStringPtr)s, nil, 0)
-	cstr := make([]byte, length); defer delete(cstr)
+	cstr := make([]byte, length)
 	gd.gde_interface.string_to_latin1_chars(cast(gd.GDExtensionConstStringPtr)s, cstring(&cstr[0]), length)
 	ret^ = string(cstr)
 }}
@@ -795,7 +878,7 @@ to_type_string :: proc(me: ^godot.Variant, ret: ^string) {{
 		os.write_string(fd, "  vtype := gd.gde_interface.variant_get_type(cast(gd.GDExtensionConstVariantPtr)v)\n")
 
 		os.write_string(fd, "  if vtype == gd.GDExtensionVariantType.GDEXTENSION_VARIANT_TYPE_STRING {\n")
-		os.write_string(fd, "    str := new(string); defer free(str)\n")
+		os.write_string(fd, "    str := new(string)\n")
 		os.write_string(fd, "    to_type_string(v, str)\n")
 		os.write_string(fd, "    a = str^\n")
 		os.write_string(fd, "  }\n")
@@ -1007,9 +1090,49 @@ clean_string_names :: proc(ptr: rawptr = nil) {
 			for member in builtin_api["members"].(json.Array) {
 				name := fmt.tprintf("%s", member.(json.Object)["name"])
 				type := fmt.tprintf("%s", member.(json.Object)["type"])
-				//fmt.println(name, correct_type(type, "", g))
+
 				os.write_string(sfd, fmt.tprintf("  %s : %s,\n", name, correct_type(type, "", g)))
 			}
+		}
+		if "methods" in builtin_api {
+			for method in builtin_api["methods"].(json.Array) {
+				method_name := fmt.tprintf("%s", method.(json.Object)["name"])
+				if method_name == "map" do method_name = "_map"
+
+				method_signature := fmt.tprintf("proc(me: ^%s", correct_type(class_name, "", g))
+				vararg := cast(bool) method.(json.Object)["is_vararg"].(json.Boolean)
+				if "arguments" in method.(json.Object) {				
+					method_signature = fmt.tprintf("%s, %s", method_signature,
+																				 make_function_parameters(method.(json.Object)["arguments"].(json.Array), g, true, true, vararg))
+				}
+				method_signature = fmt.tprintf("%s)", method_signature)				
+				if "is_static" in method.(json.Object) && method.(json.Object)["is_static"].(json.Boolean) {
+					//method_signature = fmt.tprintf("%s", method_signature) // TODO??
+				}
+				if "return_type" in method.(json.Object) {
+					return_type := fmt.tprintf("%s", method.(json.Object)["return_type"])
+					pta := get_ptr_to_arg()
+					crt := correct_type(return_type, "", g)
+					ptr := "^"
+					if crt in pta {
+						ptr = ""
+					}
+					method_signature = fmt.tprintf("%s -> %s%s", method_signature, ptr, crt)
+				}
+
+				os.write_string(sfd, fmt.tprintf("  %s : %s,\n", method_name, method_signature))
+			}
+		}
+		if "indexing_return_type" in builtin_api {
+			type := fmt.tprintf("%s", builtin_api["indexing_return_type"])
+			cname := correct_type(class_name, "", g)
+			ctype := correct_type(type, "", g)
+			if strings.contains(cname, "Int32") do ctype = "i32"
+			if strings.contains(cname, "Int64") do ctype = "i64"
+			if strings.contains(cname, "Float32") do ctype = "f32"
+			if strings.contains(cname, "Float64") do ctype = "f64"
+			os.write_string(sfd, fmt.tprintf("  set_idx : proc(me: ^%s, #any_int idx: int, v: ^%s),\n", cname, ctype))
+			os.write_string(sfd, fmt.tprintf("  get_idx : proc(me: ^%s, #any_int idx: int) -> ^%s,\n", cname, ctype))
 		}
 		
 		os.write_string(sfd, "}\n\n")
@@ -1019,30 +1142,18 @@ clean_string_names :: proc(ptr: rawptr = nil) {
 		g.pck = "godot."
 		
 		if "constants" in builtin_api {
-			axis_constants_count := 0
 			for constant in builtin_api["constants"].(json.Array) {
-				// Special case: Vector3.Axis is the only enum in the bindings.
-				// It's technically not supported by Variant but works for direct access.
 				name := fmt.tprintf("%s", constant.(json.Object)["name"])
 				type := fmt.tprintf("%s", constant.(json.Object)["type"])
 				valu := fmt.tprintf("%s", constant.(json.Object)["value"])
 
-				if class_name == "Vector3" && strings.has_prefix(name, "AXIS") {
-					if axis_constants_count == 0 {
-						os.write_string(fd, fmt.tprintf("\nAxis :: enum {{\n"))
-					}
-					os.write_string(fd, fmt.tprintf("  %s = %s,\n", name, valu))
-					axis_constants_count += 1
-					if axis_constants_count == 3 {
-						os.write_string(fd, fmt.tprintf("}\n"))
-					}
-				} else {
+				{ // any named field can be set and everything else will be zero
 					if strings.has_prefix(valu, "Vector2") { // opaque and 2 floats
 						valu, _ = strings.replace_all(valu, "(", "{")
 						valu, _ = strings.replace_all(valu, ")", "}")
 						idx := strings.index(valu, "{")
 						spl := strings.split(valu[idx+1:], ",")
-						valu = fmt.tprintf("%s%s0, %s,%s", g.pck, valu[0:idx+1], spl[0], spl[1])
+						valu = fmt.tprintf("%s%s x=%s, y=%s", g.pck, valu[0:idx+1], spl[0], spl[1])
 						valu, _ = strings.replace_all(valu, "inf", "math.inf_f32(1)")
 					}
 
@@ -1051,16 +1162,16 @@ clean_string_names :: proc(ptr: rawptr = nil) {
 						valu, _ = strings.replace_all(valu, ")", "}")
 						idx := strings.index(valu, "{")
 						spl := strings.split(valu[idx+1:], ",")
-						valu = fmt.tprintf("%s%s0, %s,%s,%s", g.pck, valu[0:idx+1], spl[0], spl[1], spl[2])
+						valu = fmt.tprintf("%s%s x=%s, y=%s, z=%s", g.pck, valu[0:idx+1], spl[0], spl[1], spl[2])
 						valu, _ = strings.replace_all(valu, "inf", "math.inf_f32(1)")
 					}
 					
-					if strings.has_prefix(valu, "Vector4") { // opaque and 4 floats
+					if strings.has_prefix(valu, "Vector4") || strings.has_prefix(valu, "Quaternion") { // opaque and 4 floats
 						valu, _ = strings.replace_all(valu, "(", "{")
 						valu, _ = strings.replace_all(valu, ")", "}")
 						idx := strings.index(valu, "{")
 						spl := strings.split(valu[idx+1:], ",")
-						valu = fmt.tprintf("%s%s0, %s,%s,%s,%s", g.pck, valu[0:idx+1], spl[0], spl[1], spl[2], spl[3])
+						valu = fmt.tprintf("%s%s x=%s, y=%s, z=%s, w=%s", g.pck, valu[0:idx+1], spl[0], spl[1], spl[2], spl[3])
 						valu, _ = strings.replace_all(valu, "inf", "math.inf_f32(1)")
 					}
 
@@ -1070,7 +1181,7 @@ clean_string_names :: proc(ptr: rawptr = nil) {
 						idx := strings.index(valu, "{")
 						spl := strings.split(valu[idx+1:], ",")
 						spl[3], _ = strings.replace_all(spl[3], "}", "")
-						valu = fmt.tprintf("%s%s0, %s,%s,%s,%s,0,0,0,0,0,0,0}", g.pck, valu[0:idx+1], spl[0], spl[1], spl[2], spl[3])
+						valu = fmt.tprintf("%s%s r=%s, g=%s, b=%s, a=%s}", g.pck, valu[0:idx+1], spl[0], spl[1], spl[2], spl[3])
 					}
 
 					if strings.has_prefix(valu, "Transform2D") {  // opaque and 3 vector2's
@@ -1078,10 +1189,34 @@ clean_string_names :: proc(ptr: rawptr = nil) {
 						valu, _ = strings.replace_all(valu, ")", "}")
 						idx := strings.index(valu, "{")
 						spl := strings.split(valu[idx+1:], ",")
-						x := fmt.tprintf("0,%s,%s", spl[0], spl[1])
-						y := fmt.tprintf("0,%s,%s", spl[2], spl[3])
-						o := fmt.tprintf("0,%s,%s", spl[4], spl[5])
-						valu = fmt.tprintf("%s%s0,{{%s}},{{%s}},{{%s}}", g.pck, valu[0:idx+1], x, y, o)
+						x := fmt.tprintf("x=%s,y=%s", spl[0], spl[1])
+						y := fmt.tprintf("x=%s,y=%s", spl[2], spl[3])
+						o := fmt.tprintf("x=%s,y=%s", spl[4], spl[5])
+						valu = fmt.tprintf("%s%s x={{%s}}, y={{%s}}, origin={{%s}}", g.pck, valu[0:idx+1], x, y, o)
+					}
+
+					if strings.has_prefix(valu, "Transform3D") {  // opaque and 3x3 mat (basis) and origin (vector3)
+						valu, _ = strings.replace_all(valu, "(", "{")
+						valu, _ = strings.replace_all(valu, ")", "}")
+						idx := strings.index(valu, "{")
+						spl := strings.split(valu[idx+1:], ",")
+						x := fmt.tprintf("x={{x=%s, y=%s, z=%s}}", spl[0], spl[1], spl[2])
+						y := fmt.tprintf("y={{x=%s, y=%s, z=%s}}", spl[3], spl[4], spl[5])
+						z := fmt.tprintf("z={{x=%s, y=%s, z=%s}}", spl[6], spl[7], spl[8])
+						o := fmt.tprintf("{{x=%s, y=%s, z=%s}}", spl[9], spl[10], spl[11])
+						valu = fmt.tprintf("%s%s basis={{%s,%s,%s}}, origin=%s", g.pck, valu[0:idx+1], x, y, z, o)
+					}
+
+					if strings.has_prefix(valu, "Basis") { // opaque and a 3x3 mat... or 3 vector3's
+						valu, _ = strings.replace_all(valu, "(", "{")
+						valu, _ = strings.replace_all(valu, ")", "}")
+						idx := strings.index(valu, "{")
+						spl := strings.split(valu[idx+1:], ",")
+						x := fmt.tprintf("x=%s, y=%s, z=%s", spl[0], spl[1], spl[2])
+						y := fmt.tprintf("x=%s, y=%s, z=%s", spl[3], spl[4], spl[5])
+						z := fmt.tprintf("x=%s, y=%s, z=%s", spl[6], spl[7], spl[8])
+						valu = fmt.tprintf("%s%s x={{%s}}, y={{%s}}, z={{%s}}", g.pck, valu[0:idx+1], x, y, z)
+						valu, _ = strings.replace_all(valu, "inf", "math.inf_f32(1)")
 					}
 					
 					os.write_string(fd, fmt.tprintf("%s : %s = %s\n", name, correct_type(type, "", g), valu))
@@ -1091,6 +1226,20 @@ clean_string_names :: proc(ptr: rawptr = nil) {
 
 		os.write_string(fd, "\n// Constructors Destructor ------------------------------\n")
 
+		os.write_string(fd, fmt.tprintf("_bind :: proc(me: ^%s) {{\n", correct_type(class_name, "", g)))
+		if "methods" in builtin_api {
+			for method in builtin_api["methods"].(json.Array) {
+				method_name := fmt.tprintf("%s", method.(json.Object)["name"])
+				if method_name == "map" do method_name = "_map"
+				os.write_string(fd, fmt.tprintf("  me.%s = %s\n", method_name, method_name))
+			}
+		}
+		if "indexing_return_type" in builtin_api {
+			os.write_string(fd, fmt.tprintf("  me.set_idx = set_idx\n"))
+			os.write_string(fd, fmt.tprintf("  me.get_idx = get_idx\n"))
+		}
+		os.write_string(fd, fmt.tprintf("}}\n"))
+		
 		if "constructors" in builtin_api {
 			for constructor in builtin_api["constructors"].(json.Array) {
 				idx, _ := strconv.parse_int(fmt.tprintf("%f", constructor.(json.Object)["index"]))
@@ -1132,6 +1281,9 @@ clean_string_names :: proc(ptr: rawptr = nil) {
 				}
 				os.write_string(fd, fmt.tprintf("  if constructor_%d == nil do constructor_%d = gd.gde_interface.variant_get_ptr_constructor(gd.GDExtensionVariantType.GDEXTENSION_VARIANT_TYPE_%s, %d)\n", idx, idx, strings.to_upper(snake_class_name), idx))
 				os.write_string(fd, fmt.tprintf("  constructor_%d(cast(gd.GDExtensionTypePtr)&me.opaque[0], cast(gd.GDExtensionConstTypePtr)&call_args[0])\n", idx))
+
+				// also call bind in all constructors
+				os.write_string(fd, fmt.tprintf("  _bind(me)\n"))
 				os.write_string(fd, "}\n")
 			}
 
@@ -1146,7 +1298,7 @@ clean_string_names :: proc(ptr: rawptr = nil) {
 					os.write_string(fd, "}\n")
 					os.write_string(fd, fmt.tprintf("to_string :: proc(me: ^%s) -> string {{\n", correct_type(class_name, "", g)))
 					os.write_string(fd, "  data_len := gd.gde_interface.string_to_latin1_chars(cast(gd.GDExtensionConstStringPtr)&me.opaque[0], nil, 0)\n")
-					os.write_string(fd, "  data := make([]u8, data_len+1); defer delete(data)\n")
+					os.write_string(fd, "  data := make([]u8, data_len+1)\n")
 					os.write_string(fd, "  gd.gde_interface.string_to_latin1_chars(cast(gd.GDExtensionConstStringPtr)&me.opaque[0], cast(cstring)&data[0], data_len)\n")
 					os.write_string(fd, "  data[data_len] = 0\n")
 					os.write_string(fd, "  return string(data)\n")					
@@ -1310,6 +1462,8 @@ clean_string_names :: proc(ptr: rawptr = nil) {
 			if strings.contains(cname, "Float32") do ctype = "f32"
 			if strings.contains(cname, "Float64") do ctype = "f64"
 
+
+			// TODO make this global? and include set_idx/get_idx in struct proc pointers
 			gdproc_map : map[string]string
 			gdproc_map["Array"] = "array_operator_index"
 			gdproc_map["PackedByteArray"] = "packed_byte_array_operator_index"
@@ -1333,13 +1487,13 @@ clean_string_names :: proc(ptr: rawptr = nil) {
 				os.write_string(fd, fmt.tprintf("}}\n"))
 				
 			} else {
-				os.write_string(fd, fmt.tprintf("set_idx :: proc(me: ^%s, idx: int, v: ^%s) {{\n", cname, ctype))
+				os.write_string(fd, fmt.tprintf("set_idx :: proc(me: ^%s, #any_int idx: int, v: ^%s) {{\n", cname, ctype))
 				os.write_string(fd, fmt.tprintf("  self := cast(gd.GDExtensionVariantPtr)me\n"))
 				os.write_string(fd, fmt.tprintf("  valid : gd.GDExtensionBool\n"))
 				os.write_string(fd, fmt.tprintf("  oob : gd.GDExtensionBool\n"))
 				os.write_string(fd, fmt.tprintf("  gd.gde_interface.variant_set_indexed(self, cast(gd.GDExtensionInt)idx, cast(gd.GDExtensionConstVariantPtr)v, &valid, &oob)\n"))
 				os.write_string(fd, fmt.tprintf("}}\n"))
-				os.write_string(fd, fmt.tprintf("get_idx :: proc(me: ^%s, idx: int) -> ^%s {{\n", cname, ctype))
+				os.write_string(fd, fmt.tprintf("get_idx :: proc(me: ^%s, #any_int idx: int) -> ^%s {{\n", cname, ctype))
 				os.write_string(fd, fmt.tprintf("  self := cast(gd.GDExtensionConstVariantPtr)me\n"))
 				os.write_string(fd, fmt.tprintf("  valid : gd.GDExtensionBool\n"))
 				os.write_string(fd, fmt.tprintf("  oob : gd.GDExtensionBool\n"))
@@ -1359,8 +1513,6 @@ clean_string_names :: proc(ptr: rawptr = nil) {
 		}
 
 		if "is_keyed" in builtin_api && builtin_api["is_keyed"].(json.Boolean) {
-			// only Dictionary is keyed right.. for now
-			//dictionary_operator_index : proc "c" (p_self: GDExtensionTypePtr, p_key: GDExtensionConstVariantPtr) -> GDExtensionVariantPtr, // p_self should be an Dictionary ptr
 			// any variant can be key
 			//pta["uint"] = {"INT", "i64"}
 			pta := get_ptr_to_arg()
@@ -1685,22 +1837,27 @@ get_return_type :: proc(function_data: json.Object, g: ^Globals) -> string {
 			return_meta = fmt.tprintf("%s", function_data["return_value"].(json.Object)["meta"])
 		}
 	}
+	return_type, _ = strings.replace_all(return_type, "const ", "")
 	return return_type
 }
 
-make_signature :: proc(class_name: string, function_data: json.Object, g: ^Globals, use_template_get_node: bool = true, for_builtin: bool = false) -> string {
+make_signature :: proc(class_name: string, function_data: json.Object, g: ^Globals, use_template_get_node: bool = true, for_builtin: bool = false, for_engine: bool = false) -> string {
 	func_signature := ""
 	is_vararg := "is_vararg" in function_data && function_data["is_vararg"].(json.Boolean)
-	is_static := "is_static" in function_data && function_data["is_static"].(json.Boolean)
+	//is_static := "is_static" in function_data && function_data["is_static"].(json.Boolean)
 
 	name := fmt.tprintf("%s", function_data["name"])
 	function_signature_internal := ""
-	if is_vararg || (!for_builtin && use_template_get_node && class_name == "Node" && name == "get_node") {
+	if is_vararg {
 		function_signature_internal = "_internal"
 	}
 
 	func_signature = fmt.tprintf("%s%s%s :: proc(", func_signature, escape_identifier(name), function_signature_internal)
 
+	if for_engine { // include "me: ^SomeClass," arg
+		func_signature = fmt.tprintf("%sme: ^%s, ", func_signature, correct_type(class_name, "", g))
+	}
+	
 	if is_vararg {
 		func_signature = fmt.tprintf("%sargs: ^^%sVariant, arg_count: int", func_signature, g.pck)
 	} else {
@@ -1713,6 +1870,10 @@ make_signature :: proc(class_name: string, function_data: json.Object, g: ^Globa
 	return_type := get_return_type(function_data, g)
 	
 	rt := correct_type(return_type, "", g) // TODO return meta?
+	if strings.contains(rt, "^void") {
+		rt = "rawptr"
+	}
+
 	if return_type != "" {
 
 		if is_engine_class(return_type, g) {
@@ -1776,38 +1937,89 @@ generate_engine_classes :: proc(class_api: json.Object, target_dir: string, used
 			parent = fmt.tprintf("%s", class_api["inherits"])
 		}
 
+		tmp := g.pck
+		g.pck = ""
 		os.write_string(sfd, fmt.tprintf("%s :: struct {{\n", class_name))
 		os.write_string(sfd, fmt.tprintf("  using _ : %s,\n", parent))
+
+		// any data??
 		
 		is_refcounted := class_name == "RefCounted"
 		if is_refcounted {
 			//os.write_string(sfd, "  reference : rawptr,\n")
 		}
 
+		// struct proc pointers
+		// it's the constructor that currently sets up these proc pointers to non-nil values, so don't include this for now
+		// os.write_string(sfd, fmt.tprintf("constructor : proc(me: ^godot.%s),\n", class_name))
+		if "methods" in class_api {
+			for method in class_api["methods"].(json.Array) {
+				method_signature := make_signature(class_name, method.(json.Object), g, true, false, true)
+				if strings.has_prefix(method_signature, "_") do continue
+				method_signature, _ = strings.replace_all(method_signature, "::", ":")
+				is_vararg := method.(json.Object)["is_vararg"].(json.Boolean)
+				if is_vararg {
+					end := strings.index(method_signature, ":")
+					method_signature = method_signature[0:end-1]
+					return_type := get_return_type(method.(json.Object), g)
+					rt := correct_type(return_type, "", g) // TODO return meta?
+					has_return := return_type != ""
+					
+					if has_return {
+						method_signature = fmt.tprintf("%s : proc(me: ^%s, args: ..any) -> %s", method_signature, correct_type(class_name, "", g), correct_type(return_type, "", g))
+					} else {
+						method_signature = fmt.tprintf("%s : proc(me: ^%s, args: ..any)", method_signature, correct_type(class_name, "", g))
+					}
+
+					method_signature, _ = strings.replace_all(method_signature, "_internal", "")
+				}
+				os.write_string(sfd, fmt.tprintf("  %s,\n", method_signature))
+			}
+		}
 		
     is_singleton := slice.contains(g.singletons[:], class_name)
     if is_singleton {
-			// this needs to change... something like a struct tag(then some "constructor"/proc logic) would work better here TODO
-			// or just have a @static var in this proc ... idk
-			// either way this should be moved out of the structures.odin and into this class methods/package file.. fd
-			os.write_string(sfd, fmt.tprintf("  get_singleton : proc() -> ^%s,\n", class_name))
-		}
-		
-		os.write_string(sfd, "}\n")
+			// anything TODO here? for singletons?
+		}		
+		os.write_string(sfd, "}\n") // end struct {
+		g.pck = tmp
 
+		// do fancy foot work to make a "constructor" for and engine object
+		os.write_string(fd, fmt.tprintf("constructor :: proc(me: ^godot.%s)\n", class_name))
+		os.write_string(fd, fmt.tprintf("{{\n"))
+		os.write_string(fd, fmt.tprintf("  @static class_name : ^godot.StringName\n"))
+		os.write_string(fd, fmt.tprintf("  if class_name == nil {{\n"))
+		os.write_string(fd, fmt.tprintf("    class_name = new(godot.StringName); gstring._to_string_name(class_name, \"%s\")\n", class_name))
+	  os.write_string(fd, fmt.tprintf("  }}\n"))
+		os.write_string(fd, fmt.tprintf("  me._owner = gd.gde_interface.classdb_construct_object(cast(gd.GDExtensionConstStringNamePtr)class_name)\n"))
+		
+		if "methods" in class_api {
+			for method in class_api["methods"].(json.Array) {
+				method_signature := make_signature(class_name, method.(json.Object), g, true, false, true)
+				method_signature, _ = strings.replace_all(method_signature, "_internal", "")
+				end := strings.index(method_signature, "::") // just get the name... TODO: only do what make_signature() does for method name...
+				method_signature = method_signature[0:end]
+				if !strings.has_prefix(method_signature, "_") {  // don't include _process() or _ready() type methods (TODO?)
+					os.write_string(fd, fmt.tprintf("  me.%s = %s\n", method_signature, method_signature))
+				}
+			}
+		}
+		os.write_string(fd, fmt.tprintf("}}\n")) // end engine object "constructor"
+		
 		if "methods" in class_api {
 			for method in class_api["methods"].(json.Array) {
 				if method.(json.Object)["is_virtual"].(json.Boolean) do continue // done later
 
-				method_signature := make_signature(class_name, method.(json.Object), g)
+				method_signature := make_signature(class_name, method.(json.Object), g, true, false, true)
 				os.write_string(fd, fmt.tprintf("%s\n", method_signature))
 				generate_engine_classes_method(method.(json.Object), class_name, fd, g)
 			}
 			for method in class_api["methods"].(json.Array) {
 				if !method.(json.Object)["is_virtual"].(json.Boolean) do continue
 
-				method_signature := make_signature(class_name, method.(json.Object), g)
+				method_signature := make_signature(class_name, method.(json.Object), g, true, false, true)
 				os.write_string(fd, fmt.tprintf("%s\n", method_signature))
+				// TODO gen virtual methods?
 			}
 		}
 	}
@@ -1824,7 +2036,7 @@ generate_engine_classes_method :: proc(method: json.Object, class_name: string, 
 	is_vararg := "is_vararg" in method && method["is_vararg"].(json.Boolean)
 
 	if !is_static {
-		os.write_string(fd, fmt.tprintf("  inst := cast(gd.GDExtensionObjectPtr)(cast(^godot.Wrapped)context.user_ptr)._owner\n"))
+		os.write_string(fd, fmt.tprintf("  inst := cast(gd.GDExtensionObjectPtr)(cast(^godot.Wrapped)me)._owner\n"))
 	} else {
 		os.write_string(fd, fmt.tprintf("  inst := cast(gd.GDExtensionObjectPtr)nil\n"))		
 	}
@@ -1846,14 +2058,19 @@ generate_engine_classes_method :: proc(method: json.Object, class_name: string, 
 			type := fmt.tprintf("%s", argument.(json.Object)["type"])
 			meta := fmt.tprintf("%s", argument.(json.Object)["meta"])
 			parameter := type_for_parameter(type, "meta" in argument.(json.Object) ? meta : "", g)
+
+			with_owner := ""
+			if is_engine_class(type, g) {
+				with_owner = "._owner"
+			}
 			
 			tmp : string
 			if type == "bool" {
 				tmp = fmt.tprintf("bval%d := %s ? 1 : 0\n  call_args[%d] = cast(gd.GDExtensionConstTypePtr)&bval%d", i, escape_identifier(name), i, i)
-			} if strings.has_prefix(parameter, "^") {
-				tmp = fmt.tprintf("val%d := %s; call_args[%d] = cast(gd.GDExtensionConstTypePtr)val%d", i, escape_identifier(name), i, i)
+			} else if strings.has_prefix(parameter, "^") {
+				tmp = fmt.tprintf("val%d := %s%s; call_args[%d] = cast(gd.GDExtensionConstTypePtr)val%d", i, escape_identifier(name), with_owner, i, i)
 			} else {
-				tmp = fmt.tprintf("val%d := %s; call_args[%d] = cast(gd.GDExtensionConstTypePtr)&val%d", i, escape_identifier(name), i, i)
+				tmp = fmt.tprintf("val%d := %s%s; call_args[%d] = cast(gd.GDExtensionConstTypePtr)%sval%d", i, escape_identifier(name), with_owner, i, with_owner==""?"&":"", i)
 			}
 			append(&arguments, strings.clone(tmp))
 		}
@@ -1906,9 +2123,9 @@ generate_engine_classes_method :: proc(method: json.Object, class_name: string, 
 		os.write_string(fd, "}\n")
 		// now write with ..any
 		if has_return {
-			os.write_string(fd, fmt.tprintf("%s :: proc(args: ..any) -> %s {{\n", method_name, correct_type(return_type, "", g)))
+			os.write_string(fd, fmt.tprintf("%s :: proc(me: ^%s, args: ..any) -> %s {{\n", method_name, correct_type(class_name, "", g), correct_type(return_type, "", g)))
 		} else {
-			os.write_string(fd, fmt.tprintf("%s :: proc(args: ..any) {{\n", method_name))
+			os.write_string(fd, fmt.tprintf("%s :: proc(me: ^%s, args: ..any) {{\n", method_name, correct_type(class_name, "", g)))
 		}
 		os.write_string(fd, fmt.tprintf("  gargs := make([]^godot.Variant, len(args)); defer delete(gargs)\n"))
 		os.write_string(fd, fmt.tprintf("  for a, idx in args {{\n"))
@@ -1922,9 +2139,9 @@ generate_engine_classes_method :: proc(method: json.Object, class_name: string, 
 		os.write_string(fd, fmt.tprintf("  defer clean_up(gargs)\n"))
 		
 		if has_return {
-			os.write_string(fd, fmt.tprintf("  return %s(&gargs[0], len(gargs))\n", fmt.tprintf("%s_internal", method_name)))
+			os.write_string(fd, fmt.tprintf("  return %s(me, &gargs[0], len(gargs))\n", fmt.tprintf("%s_internal", method_name)))
 		} else {
-			os.write_string(fd, fmt.tprintf("  %s(&gargs[0], len(gargs))\n", fmt.tprintf("%s_internal", method_name)))
+			os.write_string(fd, fmt.tprintf("  %s(me, &gargs[0], len(gargs))\n", fmt.tprintf("%s_internal", method_name)))
 		}
 		
 	}
@@ -2264,8 +2481,66 @@ generate_utility_functions :: proc(root: json.Object, target_dir: string, g: ^Gl
 		}
 		
 		os.write_string(fd, fmt.tprintf("}}\n"))
+	}	
+}
+
+generate_native_structures :: proc(root: json.Object, target_dir: string, g: ^Globals) {
+	file := strings.concatenate([]string{target_dir, "/native_structures.odin"})
+	mode: int = 0
+	when os.OS == .Linux || os.OS == .Darwin {
+		mode = os.S_IRUSR | os.S_IWUSR | os.S_IRGRP | os.S_IROTH
 	}
-	
+
+	os.remove(file)
+	sfd, err := os.open(file, os.O_WRONLY|os.O_CREATE, mode)
+	defer os.close(sfd)
+	if err != os.ERROR_NONE {
+		fmt.println("ERROR: unable to open native_structures.odin")
+		return
+	}
+	os.write_string(sfd, "package godot\n\n")
+	os.write_string(sfd, "import gd \"../../../godot_odin\"\n\n")
+
+	out_format :: proc(sfd: os.Handle, format_str: string, g: ^Globals) {
+		// take somethins like: "float left;float right"
+		// and output left: f32,\nright: f32
+		ss := strings.split(format_str, ";")
+		for s in ss {
+			name_and_type := strings.split(s, " ")
+			name := name_and_type[1]
+			is_ptr := false
+			if strings.has_prefix(name, "*") {
+				is_ptr = true
+				name = name[1:] // remove the "*"
+			}
+			is_arr := false
+			arr_size := ""
+			if strings.has_suffix(name, "]") {
+				is_arr = true
+				end := strings.index(name, "[") + 1
+				arr_size = name[end:len(name)-1]
+				name = name[:len(name)-2-len(arr_size)]
+			}
+			
+			type := correct_type(name_and_type[0], "", g)
+			type, _ = strings.replace_all(type, "::", "_")
+			if is_ptr {
+				type = fmt.tprintf("^%s", type)
+			}
+			if is_arr {
+				type = fmt.tprintf("[%s]%s", arr_size, type)
+			}
+			os.write_string(sfd, fmt.tprintf("  %s : %s,\n", name, type))
+		}
+	}
+	g.pck = ""
+	for native_structs in root["native_structures"].(json.Array) {
+		name := fmt.tprintf("%s", native_structs.(json.Object)["name"])
+		os.write_string(sfd, fmt.tprintf("%s :: struct {{\n", name))
+		format := fmt.tprintf("%s", native_structs.(json.Object)["format"])
+		out_format(sfd, format, g)
+		os.write_string(sfd, "}\n")
+	}
 }
 
 generate_bindings :: proc(root: json.Object, use_template_get_node: bool, bits:string="64", precision:string="single", output_dir:string=".") {
@@ -2299,6 +2574,7 @@ generate_bindings :: proc(root: json.Object, use_template_get_node: bool, bits:s
   generate_builtin_bindings(root, target_dir, fmt.tprintf("%s_%s", real_t, bits), &globals)
   generate_engine_classes_bindings(root, target_dir, use_template_get_node, &globals)
   generate_utility_functions(root, target_dir, &globals)
+	generate_native_structures(root, target_dir, &globals)
 }
 
 main :: proc() {

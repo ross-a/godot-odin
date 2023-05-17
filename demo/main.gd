@@ -76,5 +76,8 @@ func _ready():
 	prints("  returned BitField", $Example.test_bitfield(0))
 	prints("  returned BitField", $Example.test_bitfield(Example.FLAG_ONE | Example.FLAG_TWO))
 
+	prints("Make a sphere")
+	$Example.make_sphere()
+	
 func _on_example_custom_signal(sname, value):
 	prints("Example emitted:", sname, value)
