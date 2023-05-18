@@ -19,29 +19,34 @@ import gd "godot_odin"
 import gdc "godot_odin/core"
 import godot "godot_odin/bindgen/gen"
 
-import "godot_odin/bindgen/gen/variant"
-import gstring "godot_odin/bindgen/gen/string"
-import "godot_odin/bindgen/gen/string_name"
-import "godot_odin/bindgen/gen/utility_functions"
-import "godot_odin/bindgen/gen/viewport"
-import "godot_odin/bindgen/gen/ref_counted"
+import "godot_odin/bindgen/gen/node"
+import "godot_odin/bindgen/gen/mesh"
+import "godot_odin/bindgen/gen/array"
+import "godot_odin/bindgen/gen/label"
 import "godot_odin/bindgen/gen/object"
+import "godot_odin/bindgen/gen/variant"
 import "godot_odin/bindgen/gen/vector2"
 import "godot_odin/bindgen/gen/vector3"
 import "godot_odin/bindgen/gen/vector4"
-import "godot_odin/bindgen/gen/array"
+import "godot_odin/bindgen/gen/control"
+import "godot_odin/bindgen/gen/material"
+import "godot_odin/bindgen/gen/base_material3d"
+import "godot_odin/bindgen/gen/standard_material3d"
+import "godot_odin/bindgen/gen/color"
+import "godot_odin/bindgen/gen/viewport"
+import "godot_odin/bindgen/gen/callable"
+import "godot_odin/bindgen/gen/node_path"
 import "godot_odin/bindgen/gen/dictionary"
+import "godot_odin/bindgen/gen/array_mesh"
+import "godot_odin/bindgen/gen/string_name"
+import "godot_odin/bindgen/gen/ref_counted"
+import "godot_odin/bindgen/gen/canvas_item"
+import gstring "godot_odin/bindgen/gen/string"
+import "godot_odin/bindgen/gen/mesh_instance3d"
+import "godot_odin/bindgen/gen/utility_functions"
+import "godot_odin/bindgen/gen/packed_int32_array"
 import "godot_odin/bindgen/gen/packed_vector2_array"
 import "godot_odin/bindgen/gen/packed_vector3_array"
-import "godot_odin/bindgen/gen/packed_int32_array"
-import "godot_odin/bindgen/gen/callable"
-import "godot_odin/bindgen/gen/node"
-import "godot_odin/bindgen/gen/node_path"
-import "godot_odin/bindgen/gen/label"
-import "godot_odin/bindgen/gen/control"
-import "godot_odin/bindgen/gen/canvas_item"
-import "godot_odin/bindgen/gen/array_mesh"
-import "godot_odin/bindgen/gen/mesh_instance3d"
 
 @test
 make_into_class_file :: proc(t: ^testing.T) {
@@ -206,7 +211,6 @@ Example_get_v4 :: proc() -> ^godot.Vector4 {
   return v4
 }
 Example_test_node_argument :: proc(p_node: ^Example) -> ^Example {
-  inst := cast(^Example)context.user_ptr
   str := "nil"
   if p_node != nil {
     str = fmt.tprintf("%d", object.get_instance_id(p_node))
@@ -257,8 +261,8 @@ Example_test_array :: proc() -> ^godot.Array {
   variant.constructor(one, i32(1))
   variant.constructor(two, i32(2))
   
-  array.set_idx(arr, 0, one)
-  array.set_idx(arr, 1, two)
+  arr->set_idx(0, one)
+  arr->set_idx(1, two)
   
   return arr
 }
@@ -474,16 +478,24 @@ Example_make_sphere :: proc() {
 
     // Create mesh surface from mesh array.
     // No blendshapes, lods, or compression used.
-    mesh := new(godot.ArrayMesh); defer free(mesh)
-    array_mesh.constructor(mesh)
-
-    blend_shapes := new(godot.Array); array.constructor(blend_shapes); defer free(blend_shapes) // note: this is a TypedArray array
+    mmesh := new(godot.ArrayMesh); defer free(mmesh)
+    array_mesh.constructor(mmesh)
+		
+    blend_shapes := new(godot.Array); array.constructor(blend_shapes); defer free(blend_shapes) // note: this is a TypedArray array, hence the funny cast
     lods := new(godot.Dictionary); dictionary.constructor(lods); defer free(lods)
-    mesh->add_surface_from_arrays(godot.Mesh_PrimitiveType.PRIMITIVE_TRIANGLES, surface_array, cast(^[^]godot.Array)blend_shapes, lods, 0)
+    mmesh->add_surface_from_arrays(godot.Mesh_PrimitiveType.PRIMITIVE_TRIANGLES, surface_array, cast(^[^]godot.Array)blend_shapes, lods, 0)
+
+		// Let's do a material
+		mat := new(godot.StandardMaterial3D); defer free(mat)
+		standard_material3d.constructor(mat)
+		mcolor := new(godot.Color); defer free(mcolor)
+		color.constructor(mcolor, color.RED.r, color.RED.g, color.RED.b, color.RED.a)
+		mat->set_albedo(mcolor)
+		mmesh->surface_set_material(0, mat) // 0 is surf_idx... TODO use: (mesh->get_surface_count - 1) after add_surface_from_arrays() to get surf_idx?
     
     mi := new(godot.MeshInstance3D); defer free(mi)
     mesh_instance3d.constructor(mi)
-    mi->set_mesh(mesh)
+    mi->set_mesh(mmesh)
 
     inst->add_child(mi, false, godot.Node_InternalMode.INTERNAL_MODE_DISABLED)
   }
