@@ -217,7 +217,7 @@ make_class_file :: proc(file: string, struct_list: []typeid) {
 	context.allocator = mem.tracking_allocator(&(gdc.get_init_obj().ta))
   inst  := cast(^###)p_instance
   subs  := string_name.substr(cast(^godot.StringName)p_name, 0); defer free(subs)
-	name  := gstring.to_string(subs); defer free(strings.ptr_from_string(name))
+	name  := gstring.to_string(subs); defer free(raw_data(name))
  	names := reflect.struct_field_names(###)
   name = name[0:len(name)-1] // no terminator
   //fmt.println(#procedure, name)
@@ -245,7 +245,7 @@ make_class_file :: proc(file: string, struct_list: []typeid) {
 	context.allocator = mem.tracking_allocator(&(gdc.get_init_obj().ta))
   inst := cast(^###)p_instance
   subs  := string_name.substr(cast(^godot.StringName)p_name, 0); defer free(subs)
-	name  := gstring.to_string(subs); defer free(strings.ptr_from_string(name))
+	name  := gstring.to_string(subs); defer free(raw_data(name))
  	names := reflect.struct_field_names(###)
   name = name[0:len(name)-1] // no terminator
   //fmt.println(#procedure, name)
@@ -389,7 +389,7 @@ make_class_file :: proc(file: string, struct_list: []typeid) {
 	context = runtime.default_context()
 	context.allocator = mem.tracking_allocator(&(gdc.get_init_obj().ta))
   subs  := string_name.substr(cast(^godot.StringName)p_name, 0); defer free(subs)
-	name  := gstring.to_string(subs); defer free(strings.ptr_from_string(name))
+	name  := gstring.to_string(subs); defer free(raw_data(name))
  	names := reflect.struct_field_names(###)
   name = name[0:len(name)-1] // no terminator
   //fmt.println(#procedure, name)
@@ -681,7 +681,7 @@ make_class_file :: proc(file: string, struct_list: []typeid) {
 													os.write_string(out_fd, fmt.tprintf("    for anyidx in 0..<(p_argument_count-%d) {{\n", idx))
 													os.write_string(out_fd, fmt.tprintf("      switch v in arg%d[anyidx] {{\n", idx))
 													os.write_string(out_fd, fmt.tprintf("    	 case string:\n"))
-													os.write_string(out_fd, fmt.tprintf("		     free(strings.ptr_from_string(v))\n"))
+													os.write_string(out_fd, fmt.tprintf("		     free(raw_data(v))\n"))
 													os.write_string(out_fd, fmt.tprintf("		     free(&arg%d[anyidx].(string))\n", idx))
 													os.write_string(out_fd, fmt.tprintf("      }}\n"))
 													os.write_string(out_fd, fmt.tprintf("    }}\n"))
