@@ -2166,26 +2166,39 @@ generate_engine_classes_method :: proc(method: json.Object, class_name: string, 
 }
 
 generate_engine_classes_bindings :: proc(root: json.Object, target_dir: string, use_template_get_node: bool, g: ^Globals) {
-  file := strings.concatenate([]string{target_dir, "/engine_structures.odin"})
-  mode: int = 0
-  when os.OS == .Linux || os.OS == .Darwin {
-    mode = os.S_IRUSR | os.S_IWUSR | os.S_IRGRP | os.S_IROTH
-  }
+  file := strings.concatenate([]string{target_dir, "/engine_structures1.odin"})
 
-  os.remove(file)
-  sfd, err := os.open(file, os.O_WRONLY|os.O_CREATE, mode)
-  defer os.close(sfd)
-  if err != os.ERROR_NONE {
-    fmt.println("ERROR: unable to open engine_structures.odin")
-    return
-  }
-  os.write_string(sfd, "package godot\n\n")
-  os.write_string(sfd, "import gd \"../../../godot_odin\"\n\n")
+	do_open_file :: proc(file: string) -> os.Handle {
+		mode: int = 0
+		when os.OS == .Linux || os.OS == .Darwin {
+			mode = os.S_IRUSR | os.S_IWUSR | os.S_IRGRP | os.S_IROTH
+		}
+
+		os.remove(file)
+		sfd, err := os.open(file, os.O_WRONLY|os.O_CREATE, mode)
+		if err != os.ERROR_NONE {
+			fmt.println("ERROR: unable to open engine_structures.odin")
+			return sfd
+		}
+		os.write_string(sfd, "package godot\n\n")
+		os.write_string(sfd, "import gd \"../../../godot_odin\"\n\n")
+
+		return sfd
+	}
+	sfd := do_open_file(file)
+	defer os.close(sfd)
+	
   g.pck = "godot."
   
   for class_api in root["classes"].(json.Array) {
     class_name := fmt.tprintf("%s", class_api.(json.Object)["name"])
     if class_name == "ClassDB" do continue
+
+		if class_name == "OS" {
+			file = strings.concatenate([]string{target_dir, "/engine_structures2.odin"})
+			os.close(sfd)
+			do_open_file(file) // splits up engine_structures.odin into two files, so that ols doesn't crash from a super big file
+		}
 
     used_classes : [dynamic]string
     fully_used_classes : [dynamic]string

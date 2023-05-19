@@ -23,6 +23,7 @@ import "godot_odin/bindgen/gen/node"
 import "godot_odin/bindgen/gen/mesh"
 import "godot_odin/bindgen/gen/array"
 import "godot_odin/bindgen/gen/label"
+import "godot_odin/bindgen/gen/color"
 import "godot_odin/bindgen/gen/object"
 import "godot_odin/bindgen/gen/variant"
 import "godot_odin/bindgen/gen/vector2"
@@ -30,9 +31,6 @@ import "godot_odin/bindgen/gen/vector3"
 import "godot_odin/bindgen/gen/vector4"
 import "godot_odin/bindgen/gen/control"
 import "godot_odin/bindgen/gen/material"
-import "godot_odin/bindgen/gen/base_material3d"
-import "godot_odin/bindgen/gen/standard_material3d"
-import "godot_odin/bindgen/gen/color"
 import "godot_odin/bindgen/gen/viewport"
 import "godot_odin/bindgen/gen/callable"
 import "godot_odin/bindgen/gen/node_path"
@@ -42,9 +40,11 @@ import "godot_odin/bindgen/gen/string_name"
 import "godot_odin/bindgen/gen/ref_counted"
 import "godot_odin/bindgen/gen/canvas_item"
 import gstring "godot_odin/bindgen/gen/string"
+import "godot_odin/bindgen/gen/base_material3d"
 import "godot_odin/bindgen/gen/mesh_instance3d"
 import "godot_odin/bindgen/gen/utility_functions"
 import "godot_odin/bindgen/gen/packed_int32_array"
+import "godot_odin/bindgen/gen/standard_material3d"
 import "godot_odin/bindgen/gen/packed_vector2_array"
 import "godot_odin/bindgen/gen/packed_vector3_array"
 
@@ -410,7 +410,7 @@ make_sphere :: proc(verts: ^godot.PackedVector3Array, uvs: ^godot.PackedVector2A
       uv := new(godot.Vector2); vector2.constructor(uv, u, v)
       defer free(vert)
       defer free(uv)
-      
+
       packed_vector3_array.append(verts, vert)
       n_vert := vert->normalized(); defer free(n_vert)
       packed_vector3_array.append(normals, n_vert)
@@ -496,7 +496,7 @@ Example_make_sphere :: proc() {
     mi := new(godot.MeshInstance3D); defer free(mi)
     mesh_instance3d.constructor(mi)
     mi->set_mesh(mmesh)
-
+		
     inst->add_child(mi, false, godot.Node_InternalMode.INTERNAL_MODE_DISABLED)
   }
 }
