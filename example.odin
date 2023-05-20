@@ -47,6 +47,8 @@ import "godot_odin/bindgen/gen/packed_int32_array"
 import "godot_odin/bindgen/gen/standard_material3d"
 import "godot_odin/bindgen/gen/packed_vector2_array"
 import "godot_odin/bindgen/gen/packed_vector3_array"
+import "godot_odin/bindgen/gen/shader"
+import "godot_odin/bindgen/gen/shader_material"
 
 @test
 make_into_class_file :: proc(t: ^testing.T) {
@@ -486,12 +488,33 @@ Example_make_sphere :: proc() {
     mmesh->add_surface_from_arrays(godot.Mesh_PrimitiveType.PRIMITIVE_TRIANGLES, surface_array, cast(^[^]godot.Array)blend_shapes, lods, 0)
 
 		// Let's do a material
-		mat := new(godot.StandardMaterial3D); defer free(mat)
-		standard_material3d.constructor(mat)
-		mcolor := new(godot.Color); defer free(mcolor)
-		color.constructor(mcolor, color.RED.r, color.RED.g, color.RED.b, color.RED.a)
-		mat->set_albedo(mcolor)
-		mmesh->surface_set_material(0, mat) // 0 is surf_idx... TODO use: (mesh->get_surface_count - 1) after add_surface_from_arrays() to get surf_idx?
+		with_material := false
+		if with_material {
+			mat := new(godot.StandardMaterial3D); defer free(mat)
+			standard_material3d.constructor(mat)
+			mcolor := new(godot.Color); defer free(mcolor)
+			color.constructor(mcolor, color.RED.r, color.RED.g, color.RED.b, color.RED.a)
+			mat->set_albedo(mcolor)
+			mmesh->surface_set_material(0, mat) // 0 is surf_idx... TODO use: (mesh->get_surface_count - 1) after add_surface_from_arrays() to get surf_idx?
+		} else {
+  		// Let's make a material shader instead (using gdshader (glsl like))
+			mat := new(godot.ShaderMaterial); defer free(mat)
+			shader_material.constructor(mat)
+			mshader := new(godot.Shader); defer free(mshader)
+			shader.constructor(mshader)
+
+			shader_code := new(godot.String); defer free(shader_code)
+			gstring.constructor(shader_code, `
+shader_type spatial;
+void fragment() {
+  ALBEDO = vec3(0.9, 0.1, 0.9); // nice purple?
+}
+`
+)
+			mshader->set_code(shader_code)
+			mat->set_shader(mshader)
+			mmesh->surface_set_material(0, mat) // 0 is surf_idx... TODO use: (mesh->get_surface_count - 1) after add_surface_from_arrays() to get surf_idx?
+		}	
     
     mi := new(godot.MeshInstance3D); defer free(mi)
     mesh_instance3d.constructor(mi)
